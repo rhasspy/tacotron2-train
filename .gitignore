@@ -1,0 +1,8 @@
+__pycache__/
+.mypy_cache/
+*.egg-info/
+/build/
+/.venv/
+/dist/
+/local/
+/glow_tts_train/monotonic_align/*.so

@@ -1,0 +1,11 @@
+git+git://github.com/NVIDIA/dllogger.git@26a0f8f1958de2c0c460925ff6102a4d2486d6cc#egg=dllogger
+gruut~=0.5.0
+inflect
+librosa
+matplotlib
+numba
+numpy
+Pillow
+scipy
+unidecode
+dataclasses
