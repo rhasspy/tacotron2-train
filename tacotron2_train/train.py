@@ -49,7 +49,10 @@ def train(
     assert model is not None
     assert optimizer is not None
 
-    criterion = LossType()
+    criterion = LossType(
+        ga_alpha=config.model.guided_attention_alpha,
+        ga_sigma=config.model.guided_attention_sigma,
+    )
     criterion.cuda()
 
     # Begin training
@@ -129,12 +132,19 @@ def train_step(
         gate_padded = to_gpu(gate_padded).float()
         output_lengths = to_gpu(output_lengths).long()
 
-        mel_outputs, mel_outputs_postnet, gate_outputs, _alignments = model(
+        mel_outputs, mel_outputs_postnet, gate_outputs, alignments = model(
             text_padded, input_lengths, mel_padded, output_lengths
         )
 
         loss = criterion(
-            mel_outputs, mel_outputs_postnet, gate_outputs, mel_padded, gate_padded
+            mel_outputs,
+            mel_outputs_postnet,
+            gate_outputs,
+            mel_padded,
+            gate_padded,
+            alignments,
+            input_lengths,
+            output_lengths,
         )
 
         reduced_loss = loss.item()

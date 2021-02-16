@@ -25,52 +25,77 @@
 #
 # *****************************************************************************
 
-# import torch
+import typing
+
+import torch
 from torch import nn
 
-# class GuidedAttentionLoss(torch.nn.Module):
-#     def __init__(self, sigma=0.4):
-#         super(GuidedAttentionLoss, self).__init__()
-#         self.sigma = sigma
+from .utils import sequence_mask
 
-#     def _make_ga_masks(self, ilens, olens):
-#         B = len(ilens)
-#         max_ilen = max(ilens)
-#         max_olen = max(olens)
-#         ga_masks = torch.zeros((B, max_olen, max_ilen))
-#         for idx, (ilen, olen) in enumerate(zip(ilens, olens)):
-#             ga_masks[idx, :olen, :ilen] = self._make_ga_mask(ilen, olen, self.sigma)
-#         return ga_masks
 
-#     def forward(self, att_ws, ilens, olens):
-#         ga_masks = self._make_ga_masks(ilens, olens).to(att_ws.device)
-#         seq_masks = self._make_masks(ilens, olens).to(att_ws.device)
-#         losses = ga_masks * att_ws
-#         loss = torch.mean(losses.masked_select(seq_masks))
-#         return loss
+class GuidedAttentionLoss(torch.nn.Module):
+    def __init__(self, sigma=0.4):
+        super(GuidedAttentionLoss, self).__init__()
+        self.sigma = sigma
 
-#     @staticmethod
-#     def _make_ga_mask(ilen, olen, sigma):
-#         grid_x, grid_y = torch.meshgrid(
-#             torch.arange(olen).to(olen), torch.arange(ilen).to(ilen)
-#         )
-#         grid_x, grid_y = grid_x.float(), grid_y.float()
-#         return 1.0 - torch.exp(
-#             -(grid_y / ilen - grid_x / olen) ** 2 / (2 * (sigma ** 2))
-#         )
+    def _make_ga_masks(self, ilens, olens):
+        B = len(ilens)
+        max_ilen = max(ilens)
+        max_olen = max(olens)
+        ga_masks = torch.zeros((B, max_olen, max_ilen))
+        for idx, (ilen, olen) in enumerate(zip(ilens, olens)):
+            ga_masks[idx, :olen, :ilen] = self._make_ga_mask(ilen, olen, self.sigma)
+        return ga_masks
 
-#     @staticmethod
-#     def _make_masks(ilens, olens):
-#         in_masks = sequence_mask(ilens)
-#         out_masks = sequence_mask(olens)
-#         return out_masks.unsqueeze(-1) & in_masks.unsqueeze(-2)
+    def forward(self, att_ws, ilens, olens):
+        ga_masks = self._make_ga_masks(ilens, olens).to(att_ws.device)
+        seq_masks = self._make_masks(ilens, olens).to(att_ws.device)
+        losses = ga_masks * att_ws
+        loss = torch.mean(losses.masked_select(seq_masks))
+        return loss
+
+    @staticmethod
+    def _make_ga_mask(ilen, olen, sigma):
+        grid_x, grid_y = torch.meshgrid(
+            torch.arange(olen).to(olen), torch.arange(ilen).to(ilen)
+        )
+        grid_x, grid_y = grid_x.float(), grid_y.float()
+        return 1.0 - torch.exp(
+            -((grid_y / ilen - grid_x / olen) ** 2) / (2 * (sigma ** 2))
+        )
+
+    @staticmethod
+    def _make_masks(ilens, olens):
+        in_masks = sequence_mask(ilens)
+        out_masks = sequence_mask(olens)
+        return out_masks.unsqueeze(-1) & in_masks.unsqueeze(-2)
 
 
 # -----------------------------------------------------------------------------
 
 
 class Tacotron2Loss(nn.Module):
-    def forward(self, mel_out, mel_out_postnet, gate_out, mel_target, gate_target):
+    def __init__(self, ga_alpha: float = 0.0, ga_sigma: float = 0.4):
+        super(Tacotron2Loss, self).__init__()
+
+        self.ga_alpha = ga_alpha
+        self.criterion_ga: typing.Optional[GuidedAttentionLoss] = None
+
+        if self.ga_alpha > 0:
+            # Enabled guided attention
+            self.criterion_ga = GuidedAttentionLoss(sigma=ga_sigma)
+
+    def forward(
+        self,
+        mel_out,
+        mel_out_postnet,
+        gate_out,
+        mel_target,
+        gate_target,
+        alignments,
+        input_lengths,
+        output_lengths,
+    ):
         mel_target.requires_grad = False
         gate_target.requires_grad = False
         gate_target = gate_target.view(-1, 1)
@@ -84,9 +109,9 @@ class Tacotron2Loss(nn.Module):
         final_loss = mel_loss + gate_loss
 
         # guided attention loss (if enabled)
-        # if self.config.ga_alpha > 0:
-        #     ga_loss = self.criterion_ga(alignments, input_lens, alignment_lens)
-        #     final_loss += ga_loss * self.ga_alpha
+        if self.ga_alpha > 0:
+            ga_loss = self.criterion_ga(alignments, input_lengths, output_lengths)
+            final_loss += ga_loss * self.ga_alpha
 
         return final_loss
 

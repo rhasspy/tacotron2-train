@@ -48,6 +48,10 @@ class ModelConfig(DataClassJsonMixin):
     attention_location_n_filters: int = 32
     attention_location_kernel_size: int = 31
 
+    # Guided attention
+    guided_attention_alpha: float = 5.0
+    guided_attention_sigma: float = 0.4
+
     # Postnet
     postnet_embedding_dim: int = 512
     postnet_kernel_size: int = 5
@@ -74,7 +78,7 @@ class TrainingConfig(DataClassJsonMixin):
 
     def save(self, config_file: typing.TextIO):
         """Save config as JSON to a file"""
-        json.dump(self.to_json(), config_file, indent=4)
+        json.dump(self.to_dict(), config_file, indent=4)
 
     @staticmethod
     def load(config_file: typing.TextIO) -> "TrainingConfig":
