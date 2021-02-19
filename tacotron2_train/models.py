@@ -25,6 +25,7 @@
 #
 # *****************************************************************************
 
+import logging
 import typing
 from math import sqrt
 
@@ -35,6 +36,10 @@ from torch.nn import functional as F
 from .config import TrainingConfig
 from .layers import ConvNorm, LinearNorm
 from .utils import get_mask_from_lengths, to_gpu
+
+_LOGGER = logging.getLogger("tacotron2_train.models")
+
+# -----------------------------------------------------------------------------
 
 
 class LocationLayer(nn.Module):
@@ -698,7 +703,6 @@ class Decoder(nn.Module):
             if self.early_stopping and torch.sum(not_finished) == 0:
                 break
             if len(mel_outputs) == self.max_decoder_steps:
-                print("Warning! Reached max decoder steps")
                 break
 
             decoder_input = mel_output

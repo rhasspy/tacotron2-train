@@ -66,6 +66,7 @@ def main():
     # Inference only
     model.forward = model.infer
 
+    # Compile model and save
     jitted_model = torch.jit.script(model)
     torch.jit.save(jitted_model, str(args.output))
 

@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger("tacotron2_train.infer")
 
 def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(prog="glow-tts-train.infer")
+    parser = argparse.ArgumentParser(prog="tacotron2-train.infer")
     parser.add_argument("checkpoint", help="Path to model checkpoint (.pth)")
     parser.add_argument(
         "--config", action="append", help="Path to JSON configuration file(s)"
