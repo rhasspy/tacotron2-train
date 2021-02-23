@@ -7,12 +7,14 @@ import typing
 from pathlib import Path
 
 import torch
+from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from .checkpoint import load_checkpoint
 from .config import TrainingConfig
 from .dataset import PhonemeMelCollate, PhonemeMelLoader, load_mels, load_phonemes
-from .models import ModelType, OptimizerType
+from .models import ModelType, OptimizerType, setup_model
 from .train import train
 
 _LOGGER = logging.getLogger("tacotron2_train")
@@ -48,6 +50,9 @@ def main():
         help="Number of epochs between checkpoints",
     )
     parser.add_argument(
+        "--local_rank", type=int, help="Rank passed from torch.distributed.launch"
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to the console"
     )
     args = parser.parse_args()
@@ -62,6 +67,13 @@ def main():
     # -------------------------------------------------------------------------
 
     assert torch.cuda.is_available(), "GPU is required for training"
+
+    is_distributed = args.local_rank is not None
+
+    if is_distributed:
+        _LOGGER.info("Setting up distributed run (rank=%s)", args.local_rank)
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend="nccl", init_method="env://")
 
     # -------------------------------------------------------------------------
 
@@ -133,13 +145,16 @@ def main():
     collate_fn = PhonemeMelCollate()
 
     batch_size = config.batch_size if args.batch_size is None else args.batch_size
+    sampler = DistributedSampler(dataset) if is_distributed else None
+
     train_loader = DataLoader(
         dataset,
-        shuffle=True,
+        shuffle=(not is_distributed),
         batch_size=batch_size,
         pin_memory=True,
         drop_last=True,
         collate_fn=collate_fn,
+        sampler=sampler,
     )
 
     model: typing.Optional[ModelType] = None
@@ -157,6 +172,13 @@ def main():
             args.checkpoint,
             global_step,
             config.learning_rate,
+        )
+    else:
+        model, optimizer = setup_model(config)
+
+    if is_distributed:
+        model = DistributedDataParallel(
+            model, device_ids=[args.local_rank], output_device=args.local_rank
         )
 
     # Train
