@@ -39,7 +39,7 @@ from .utils import get_mask_from_lengths
 
 _LOGGER = logging.getLogger("tacotron2_train.export_onnx")
 
-OPSET_VERSION = 11
+OPSET_VERSION = 12
 
 # -----------------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ def main():
 
     # Load checkpoint
     _LOGGER.debug("Loading checkpoint from %s", args.checkpoint)
-    checkpoint = load_checkpoint(args.checkpoint, config, use_cuda=True)
+    checkpoint = load_checkpoint(args.checkpoint, config, use_cuda=True, fp16=args.fp16)
     tacotron2 = checkpoint.model
 
     _LOGGER.info(
@@ -102,6 +102,7 @@ def main():
         low=0, high=config.model.n_symbols, size=(1, 50), dtype=torch.long
     ).cuda()
     sequence_lengths = torch.IntTensor([sequences.size(1)]).cuda().long()
+
     dummy_input = (sequences, sequence_lengths)
 
     # Encoder
