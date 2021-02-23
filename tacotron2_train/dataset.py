@@ -42,7 +42,7 @@ class PhonemeMelLoader(torch.utils.data.Dataset):
             mel_path = self.mels_dir / (utt_id + ".npy")
 
             # TODO: Verify shape
-            mel = np.load(mel_path, allow_pickle=True)
+            mel = torch.FloatTensor(np.load(mel_path, allow_pickle=True))
 
             # Cache mel
             self.id_mels[utt_id] = mel
