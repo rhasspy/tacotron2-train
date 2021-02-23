@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
 from .checkpoint import Checkpoint, save_checkpoint
@@ -12,13 +13,6 @@ from .config import TrainingConfig
 from .loss_function import LossType
 from .models import ModelType, OptimizerType, setup_model
 from .utils import to_gpu
-
-try:
-    from apex import amp
-except ImportError:
-    # apex not available (no fp16)
-    amp = None
-
 
 _LOGGER = logging.getLogger("tacotron2_train")
 
@@ -40,12 +34,6 @@ def train(
 
     model, optimizer = setup_model(config, model=model, optimizer=optimizer)
 
-    amp_run = False
-    if config.fp16_run and amp:
-        # Use AMP for FP16 run
-        amp_run = True
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-
     assert model is not None
     assert optimizer is not None
 
@@ -55,6 +43,9 @@ def train(
     )
     criterion.cuda()
 
+    # Gradient scaler
+    scaler = GradScaler() if config.fp16_run else None
+
     # Begin training
     for epoch in range(1, config.epochs + 1):
         _LOGGER.debug(
@@ -62,15 +53,16 @@ def train(
         )
         epoch_start_time = time.perf_counter()
         global_step, learning_rate = train_step(
-            global_step,
-            epoch,
-            learning_rate,
-            config,
-            model,
-            optimizer,
-            criterion,
-            train_loader,
-            amp_run,
+            global_step=global_step,
+            epoch=epoch,
+            learning_rate=learning_rate,
+            config=config,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            train_loader=train_loader,
+            fp16_run=config.fp16_run,
+            scaler=scaler,
         )
 
         if (epoch % checkpoint_epochs) == 0:
@@ -107,7 +99,8 @@ def train_step(
     optimizer: OptimizerType,
     criterion: LossType,
     train_loader: DataLoader,
-    amp_run: bool,
+    fp16_run: bool,
+    scaler: typing.Optional[GradScaler] = None,
 ) -> typing.Tuple[int, float]:
     steps_per_epoch = len(train_loader)
 
@@ -132,39 +125,44 @@ def train_step(
         gate_padded = to_gpu(gate_padded).float()
         output_lengths = to_gpu(output_lengths).long()
 
-        mel_outputs, mel_outputs_postnet, gate_outputs, alignments = model(
-            text_padded, input_lengths, mel_padded, output_lengths
-        )
+        with autocast(enabled=fp16_run):
+            mel_outputs, mel_outputs_postnet, gate_outputs, alignments = model(
+                text_padded, input_lengths, mel_padded, output_lengths
+            )
 
-        loss = criterion(
-            mel_outputs,
-            mel_outputs_postnet,
-            gate_outputs,
-            mel_padded,
-            gate_padded,
-            alignments,
-            input_lengths,
-            output_lengths,
-        )
+            loss = criterion(
+                mel_outputs,
+                mel_outputs_postnet,
+                gate_outputs,
+                mel_padded,
+                gate_padded,
+                alignments,
+                input_lengths,
+                output_lengths,
+            )
 
         reduced_loss = loss.item()
 
         if np.isnan(reduced_loss):
             raise RuntimeError(f"loss is NaN at global step {global_step}")
 
-        if amp_run:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                amp.master_params(optimizer), config.grad_clip_threshold
-            )
-        else:
-            loss.backward()
+        if fp16_run:
+            # Float16
+            assert scaler is not None
+            scaler.scale(loss).backward()
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(), config.grad_clip_threshold
             )
 
-        optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            # Float32
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), config.grad_clip_threshold
+            )
+            optimizer.step()
 
         _LOGGER.debug(
             "Loss: %s (step=%s/%s)", reduced_loss, batch_idx + 1, steps_per_epoch
@@ -191,16 +189,6 @@ def adjust_learning_rate(
         lr = config.learning_rate * ((0.1 ** (p // 2)) * (1.0 if p % 2 == 0 else 0.3))
     else:
         lr = config.learning_rate * (config.anneal_factor ** p)
-
-    # if optimizer.param_groups[0]["lr"] != lr:
-    #     DLLogger.log(
-    #         step=(epoch, iteration),
-    #         data={
-    #             "learning_rate changed": str(optimizer.param_groups[0]["lr"])
-    #             + " -> "
-    #             + str(lr)
-    #         },
-    #     )
 
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
