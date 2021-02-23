@@ -54,6 +54,7 @@ def load_checkpoint(
     optimizer: typing.Optional[OptimizerType] = None,
     load_optimizer: bool = True,
     use_cuda: bool = True,
+    fp16: bool = False,
 ) -> Checkpoint:
     """Load model/optimizer/training state from a Torch checkpoint"""
     checkpoint_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -95,6 +96,9 @@ def load_checkpoint(
         model.module.load_state_dict(new_state_dict)  # type: ignore
     else:
         model.load_state_dict(new_state_dict)
+
+    if fp16:
+        model.half()
 
     return Checkpoint(
         model=model,

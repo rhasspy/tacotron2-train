@@ -2,6 +2,7 @@
 import argparse
 import logging
 import random
+import sys
 import typing
 from pathlib import Path
 
@@ -24,7 +25,15 @@ def main():
     parser.add_argument(
         "phonemes_csv", help="CSV file with utterance id|phoneme ids lines"
     )
-    parser.add_argument("mels_jsonl", help="JSONL file with mel spectrograms")
+    parser.add_argument(
+        "mels",
+        help="JSONL file with mel spectrograms or directory with .npy files (--mels-dir)",
+    )
+    parser.add_argument(
+        "--mels-dir",
+        action="store_true",
+        help="mels argument is a directory with .npy files",
+    )
     parser.add_argument(
         "--config", action="append", help="Path to JSON configuration file(s)"
     )
@@ -59,7 +68,7 @@ def main():
     # Convert to paths
     args.model_dir = Path(args.model_dir)
     args.phonemes_csv = Path(args.phonemes_csv)
-    args.mels_jsonl = Path(args.mels_jsonl)
+    args.mels = Path(args.mels)
 
     if args.config:
         args.config = [Path(p) for p in args.config]
@@ -87,12 +96,29 @@ def main():
     _LOGGER.info("Loaded phonemes for %s utterances", len(id_phonemes))
 
     # Load mels
-    # TODO: Verify audio configuration
-    _LOGGER.debug("Loading mels from %s", args.mels_jsonl)
-    with open(args.mels_jsonl, "r") as mels_file:
-        id_mels = load_mels(mels_file)
+    id_mels = {}
+    if args.mels_dir:
+        _LOGGER.debug("Verifying mels in %s", args.mels)
+        missing_ids = set()
+        for utt_id in id_phonemes:
+            mel_path = args.mels / (utt_id + ".npy")
+            if not mel_path.is_file():
+                missing_ids.add(utt_id)
 
-    _LOGGER.info("Loaded mels for %s utterances", len(id_mels))
+        if missing_ids:
+            _LOGGER.fatal(
+                "Missing .npy files for utterances: %s", sorted(list(missing_ids))
+            )
+            sys.exit(1)
+
+        _LOGGER.info("Verified %s mel(s) in %s", len(id_phonemes), args.mels)
+    else:
+        # TODO: Verify audio configuration
+        _LOGGER.debug("Loading JSONL mels from %s", args.mels)
+        with open(args.mels, "r") as mels_file:
+            id_mels = load_mels(mels_file)
+
+        _LOGGER.info("Loaded mels for %s utterances", len(id_mels))
 
     # Set n_symbols
     if config.model.n_symbols < 1:
@@ -108,7 +134,9 @@ def main():
         _LOGGER.debug("Saved config to %s", args.config)
 
     # Create data loader
-    dataset = PhonemeMelLoader(id_phonemes, id_mels)
+    dataset = PhonemeMelLoader(
+        id_phonemes, id_mels, mels_dir=(args.mels if args.mels_dir else None)
+    )
     collate_fn = PhonemeMelCollate()
 
     batch_size = config.batch_size if args.batch_size is None else args.batch_size
