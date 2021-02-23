@@ -1,6 +1,7 @@
 """Classes and methods for loading phonemes and mel spectrograms"""
 import csv
 import json
+import logging
 import random
 import typing
 from pathlib import Path
@@ -8,6 +9,10 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.utils.data
+
+_LOGGER = logging.getLogger("tacotron2_train.dataset")
+
+# -----------------------------------------------------------------------------
 
 
 class PhonemeMelLoader(torch.utils.data.Dataset):
@@ -114,6 +119,11 @@ def load_phonemes(csv_file: typing.TextIO) -> typing.Dict[str, torch.IntTensor]:
     for row in reader:
         utt_id, phoneme_str = row[0], row[1]
         phoneme_ids = [int(p) for p in phoneme_str.strip().split()]
+
+        if not phoneme_ids:
+            _LOGGER.warning("No phonemes for %s, dropping utterance", utt_id)
+            continue
+
         phonemes[utt_id] = torch.IntTensor(phoneme_ids)
 
     return phonemes
