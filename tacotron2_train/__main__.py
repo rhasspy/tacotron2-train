@@ -194,6 +194,7 @@ def main():
             global_step=global_step,
             checkpoint_epochs=args.checkpoint_epochs,
             learning_rate=config.learning_rate,
+            rank=(args.local_rank if is_distributed else 0),
         )
         _LOGGER.info("Training finished")
     except KeyboardInterrupt:

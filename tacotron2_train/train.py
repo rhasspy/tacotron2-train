@@ -28,6 +28,7 @@ def train(
     global_step: int = 1,
     checkpoint_epochs: int = 1,
     learning_rate: float = 1e-3,
+    rank: int = 0,
 ):
     """Run training for the specified number of epochs"""
     torch.manual_seed(config.seed)
@@ -65,7 +66,7 @@ def train(
             scaler=scaler,
         )
 
-        if (epoch % checkpoint_epochs) == 0:
+        if ((epoch % checkpoint_epochs) == 0) and (rank == 0):
             # Save checkpoint
             checkpoint_path = model_dir / f"checkpoint_{global_step}.pth"
             _LOGGER.debug("Saving checkpoint to %s", checkpoint_path)
