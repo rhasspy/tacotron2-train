@@ -131,6 +131,15 @@ def train_step(
                 text_padded, input_lengths, mel_padded, output_lengths
             )
 
+            # Adjust for case where n_frames_per_step > 1
+            remainder = output_lengths.max() % config.model.n_frames_per_step
+            if remainder != 0:
+                alignment_lengths = (
+                    output_lengths + (config.model.n_frames_per_step - remainder)
+                ) // config.model.n_frames_per_step
+            else:
+                alignment_lengths = output_lengths // config.model.n_frames_per_step
+
             loss = criterion(
                 mel_outputs,
                 mel_outputs_postnet,
@@ -139,7 +148,7 @@ def train_step(
                 gate_padded,
                 alignments,
                 input_lengths,
-                output_lengths,
+                alignment_lengths,
             )
 
         reduced_loss = loss.item()

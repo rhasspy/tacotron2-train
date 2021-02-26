@@ -94,7 +94,7 @@ class Tacotron2Loss(nn.Module):
         gate_target,
         alignments,
         input_lengths,
-        output_lengths,
+        alignment_lengths,
     ):
         mel_target.requires_grad = False
         gate_target.requires_grad = False
@@ -110,7 +110,7 @@ class Tacotron2Loss(nn.Module):
 
         # guided attention loss (if enabled)
         if self.ga_alpha > 0:
-            ga_loss = self.criterion_ga(alignments, input_lengths, output_lengths)
+            ga_loss = self.criterion_ga(alignments, input_lengths, alignment_lengths)
             final_loss += ga_loss * self.ga_alpha
 
         return final_loss

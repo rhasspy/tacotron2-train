@@ -142,7 +142,7 @@ def main():
     dataset = PhonemeMelLoader(
         id_phonemes, id_mels, mels_dir=(args.mels if args.mels_dir else None)
     )
-    collate_fn = PhonemeMelCollate()
+    collate_fn = PhonemeMelCollate(n_frames_per_step=config.model.n_frames_per_step)
 
     batch_size = config.batch_size if args.batch_size is None else args.batch_size
     sampler = DistributedSampler(dataset) if is_distributed else None
