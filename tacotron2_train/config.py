@@ -26,7 +26,7 @@ class AudioConfig(DataClassJsonMixin):
 class ModelConfig(DataClassJsonMixin):
     # Symbols
     n_symbols: int = 0
-    symbols_embedding_dim: int = 512
+    symbols_embedding_dim: int = 256  # 512
     mask_padding: bool = False
 
     # Encoding
@@ -35,8 +35,8 @@ class ModelConfig(DataClassJsonMixin):
     encoder_embedding_dim: int = 512
 
     # Decoder
-    n_frames_per_step: int = 1
-    decoder_rnn_dim: int = 1024
+    n_frames_per_step: int = 5  # 1
+    decoder_rnn_dim: int = 256  # 1024
     prenet_dim: int = 256
     max_decoder_steps: int = 2000
     gate_threshold: float = 0.5
