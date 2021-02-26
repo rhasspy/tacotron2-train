@@ -26,7 +26,7 @@ class AudioConfig(DataClassJsonMixin):
 class ModelConfig(DataClassJsonMixin):
     # Symbols
     n_symbols: int = 0
-    symbols_embedding_dim: int = 256  # 512
+    symbols_embedding_dim: int = 512
     mask_padding: bool = False
 
     # Encoding
