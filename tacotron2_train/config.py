@@ -73,10 +73,11 @@ class TrainingConfig(DataClassJsonMixin):
     dynamic_loss_scaling: bool = True
     disable_uniform_initialize_bn_weight: bool = False
     batch_size: int = 32
-    fp16_run: bool = True
+    fp16_run: bool = False
     audio: AudioConfig = field(default_factory=AudioConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     version: int = 1
+    git_commit: str = ""
 
     def save(self, config_file: typing.TextIO):
         """Save config as JSON to a file"""

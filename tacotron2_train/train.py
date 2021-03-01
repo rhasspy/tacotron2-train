@@ -80,6 +80,12 @@ def train(
                 ),
                 checkpoint_path,
             )
+
+            # Save checkpoint config
+            config_path = model_dir / f"config_{global_step}.json"
+            with open(config_path, "w") as config_file:
+                config.save(config_file)
+
             _LOGGER.info("Saved checkpoint to %s", checkpoint_path)
 
         epoch_end_time = time.perf_counter()
@@ -160,6 +166,7 @@ def train_step(
             # Float16
             assert scaler is not None
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(), config.grad_clip_threshold
             )

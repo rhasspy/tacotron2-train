@@ -52,6 +52,7 @@ def main():
     parser.add_argument(
         "--local_rank", type=int, help="Rank passed from torch.distributed.launch"
     )
+    parser.add_argument("--git-commit", help="Git commit to store in config")
     parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to the console"
     )
@@ -93,6 +94,8 @@ def main():
     if args.config:
         _LOGGER.debug("Loading configuration(s) from %s", args.config)
         config = TrainingConfig.load_and_merge(config, args.config)
+
+    config.git_commit = args.git_commit
 
     # Create output directory
     args.model_dir.mkdir(parents=True, exist_ok=True)

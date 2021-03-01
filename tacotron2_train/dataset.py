@@ -80,8 +80,8 @@ class PhonemeMelCollate:
         num_mels = batch[0][1].size(0)
         max_target_len = max([x[1].size(1) for x in batch])
         if (max_target_len % self.n_frames_per_step) != 0:
-            max_target_len += (
-                self.n_frames_per_step - (max_target_len % self.n_frames_per_step)
+            max_target_len += self.n_frames_per_step - (
+                max_target_len % self.n_frames_per_step
             )
             assert max_target_len % self.n_frames_per_step == 0
 
